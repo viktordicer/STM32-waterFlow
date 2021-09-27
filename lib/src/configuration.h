@@ -1,4 +1,10 @@
+
+#ifndef _CONFIGURATION_H_
+#define _CONFIGURATION_H_
+
 //-------------HARDWARE VARIABLES
+// BLACKPILL
+#define GREEN_LED               PC13 // Green LED on BlackPill - when not able to connect to MQTT brocker
 //ETHERNET
 #define RESET_PIN               PA0 // Reset of ENC28J60
 
@@ -6,21 +12,18 @@
 #define INTERRUPT_INT_FLOW      PB9 // internal circuit flow sensor
 #define INTERRUPT_EXT_FLOW      PB8 // external circuit flow sensor
 
-//VALVE commands
+//VALVE 1
 #define V1_OPEN                 PB7   // internal valve open command
 #define V1_CLOSE                PB6   // internal valve close command
-#define V2_OPEN                 PB3   // external valve open command
-#define V2_CLOSE                PA15  // external valve close command
-
-// VALVE states 
 #define V1_OPENED               PB12   // internal valve opened state
 #define V1_CLOSED               PB13   // internal valve closed state
+
+// VALVE 2 
+#define V2_OPEN                 PB3   // external valve open command
+#define V2_CLOSE                PA15  // external valve close command
 #define V2_OPENED               PA9  // external valve opened state
 #define V2_CLOSED               PA8  // external valve closed state
 
-//ETHERNET ADDRESS
-int IP_ADDRESS[4]=        {192, 168, 0 , 170};
-uint8_t MAC[6] =          {0x02, 0xA1, 0xA5, 0x03, 0x04, 0x05};
 
 //MQTT
 #define MQTT_SERVER_IP           "192.168.0.107"   // IP address of MQTT broker
@@ -55,6 +58,9 @@ long    total_mqtt_connection =  0;                // NUmbet of total connection
 //VARIABLES
 #define DELAY              10000 // delay in ms
 #define MAX_RPM_COUNTS     80000 //reset rpm counts after reach max
+
+double max_internal_liters = 20;
+double max_external_liters = 200;
 //valve states array
 
 // conversion variables
@@ -65,6 +71,6 @@ long    total_mqtt_connection =  0;                // NUmbet of total connection
 int     lan_connection_lost =   0;// Number of MQTT connection lost 
 #define VALVE_PROTECTION_PERIOD 10000 // automatically turn off servo valve when no feedback from internal switch
 
-
+#endif // _CONFIGURATION_H_
 
 

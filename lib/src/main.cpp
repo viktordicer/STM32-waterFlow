@@ -58,6 +58,7 @@
 #include <Ethernet.h>  //ETHERNET LIBRARY
 #include <PubSubClient.h> //MQTT LIBRARY
 #include "configuration.h"
+#include "valve.h"
 
 
 // Methodes
@@ -75,7 +76,6 @@ void ethernetTurnoff();
 
 //------------------------- Program variables
 //NEW Objects
-IPAddress ip(IP_ADDRESS[0], IP_ADDRESS[1], IP_ADDRESS[2], IP_ADDRESS[3]);                     //IP address of this device
 EthernetClient ethClient;
 PubSubClient mqttClient(MQTT_SERVER_IP, 1883, callback, ethClient);
 
@@ -109,28 +109,18 @@ char litExterior[15];
 double compareExterLit = 0;
 char compareExterLit_msg[15];
 
-//Max values
-double max_internal_liters = 20;
-double max_external_liters = 200;
 
 // define valves pins
-int valveSet[4] = {V1_OPEN, V1_CLOSE, V2_OPEN, V2_CLOSE};
-int valvePosition[4] = {V1_OPENED, V1_CLOSED, V2_OPENED, V2_CLOSED};
 bool valveRun[4] = {0,0,0,0}; // 0- valve1 open, 1-valve1 close, 2-valve2 open, 3-valve2 close
 
+Valve val1(V1_OPEN, V1_CLOSE, V1_OPENED, V1_CLOSED);
+Valve val2(V2_OPEN, V2_CLOSE, V2_OPENED, V2_CLOSED);
 
-
+Ethernet.begin(
 // ------------------ SETUP ---------------------------------------------------------
 void setup() {
 
-  Serial.begin(57600);
-  Serial.println("STM32 strarting...");
-
-  for(int i=0; i<4; i++){
-    pinMode(valveSet[i], OUTPUT);
-    pinMode(valvePosition[i], INPUT_PULLUP);
-    }
-  pinMode(PC13, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT); // green LED on Blackpill
   digitalWrite(PC13, HIGH);
   pinMode(INTERRUPT_INT_FLOW, INPUT_PULLUP);
   pinMode(INTERRUPT_EXT_FLOW, INPUT_PULLUP);
@@ -142,7 +132,6 @@ void setup() {
   delay(1500);
   mqttClient.setServer(MQTT_SERVER_IP,1883);
   mqttClient.setCallback(callback);
-  Serial.println("STM32 is ready");
 }
 
 // ------------------ LOOP ---------------------------------------------------------
@@ -151,7 +140,6 @@ void loop() {
   Ethernet.maintain();
   time = millis();
   if(first_run){
-    Serial.println("First run");
     mqttConnection();
     mqttClient.loop();
     mqttClient.publish(SUBSCRIBE_TOPIC, "1"); // open internal valve
@@ -161,8 +149,6 @@ void loop() {
 
   // *------------------------Solve liters-----------------------------------------
   if(time-last_time > DELAY){
-    Serial.println("Check rpm");
-    Serial.println(rpmInt);
     if(rpmInt > 0){
       flowSolve();
       compareFlow();
@@ -261,7 +247,7 @@ void mqttConnection() {
         mqttClient.subscribe(SUBSCRIBE_TOPIC);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_INT);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
-        digitalWrite(PC13, HIGH);
+        digitalWrite(GREEN_LED, HIGH);
         mqtt_conn = true;
       } else {
         Serial.println("failed, rc=");
@@ -311,45 +297,7 @@ void ethernetTurnoff(){
 
 // *MQTT CALLBACK 
 void callback(char* topic, byte* payload, unsigned int length) {
-  // In order to republish this payload, a copy must be made
-  // as the orignal payload buffer will be overwritten whilst
-  // constructing the PUBLISH packet.
 
-  // Allocate the correct amount of memory for the payload copy
-/*
-  char p[length + 1];
-  memcpy( p, payload, length );
-  p[length] = NULL;
-  Serial.print( "Answer: " );
-  //String msg = String(p);
-  Serial.println(String(p));
-  /*
-  if(strcmp(topic, SUBSCRIBE_TOPIC) ==0){
-    if(msg == "1") {
-    //mqttClient.publish(VALVE1_STATE_TOPIC, "opened");
-    Serial.println("a");
-    valveChangeState(1,1); //open internal valve
-    // Close valve internal
-    } else if (msg == "2") {
-      //mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
-      Serial.println("b");
-      valveChangeState(1,0); //close internal valve
-    // Open valve external
-    } else if (msg == "3") {
-      //mqttClient.publish(VALVE2_STATE_TOPIC, "opened");
-      Serial.println("c");
-    valveChangeState(2,1); //open external valve
-
-    // Close valve external
-    } else if (msg == "4") {
-      //mqttClient.publish(VALVE2_STATE_TOPIC, "closed");
-      Serial.println("d");
-      valveChangeState(2,0); //close external valve
-    }
-  } else if(strcmp(topic, SUBSCRIBE_TOPIC_INT) ==0){
-
-  }
-*/
   byte* p = (byte*)malloc(length);
   // Copy the payload to the new buffer
   memcpy(p,payload,length);
@@ -383,6 +331,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     String s = String((char*)payload);
     max_internal_liters = s.toDouble();
     Serial.println(max_internal_liters);
+    
     mqttClient.publish(LIT_INT_MAX_TOPIC, p, length);
 
   
@@ -394,10 +343,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     mqttClient.publish(LIT_EXT_MAX_TOPIC, p, length);
   }
 
-
-  
   // Free the memory
-  
   free(p);
   
 }
@@ -477,7 +423,6 @@ void valveReadState() {
  * @param  valve_num : number of servo valve 1 for internal 2 for external
  * @param  valve_state : 1 - open valve , 0 - close valve
  */
-
 void valveChangeState(int valve_num , int valve_state){
   last_time_state = time;
   //open valve1
