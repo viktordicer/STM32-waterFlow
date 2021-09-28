@@ -4,26 +4,25 @@
 #include <Arduino.h>
 class Valve {
 public:
-    /**
-     * @brief Construct a new Valve object
-     * 
-     * @param open_cmd_pin 
-     * @param close_cmd_pin 
-     * @param opened_state_pin 
-     * @param closed_state_pin 
-     */
-    Valve(byte open_cmd_pin, byte close_cmd_pin, byte opened_state_pin, byte closed_state_pin);
+  Valve(uint8_t open_cmd_pin, uint8_t close_cmd_pin, uint8_t opened_state_pin, uint8_t closed_state_pin);
 
-    void get_state();
-    void set_state();
+  void checkState();
+  
+  void openValve();
+  void closeValve();
+  void stopValve();
+  bool isOpen();
+  bool isClosed();
+  bool isRunning();
 
 private:
-    void init();
-    byte open_cmd_pin;
-    byte close_cmd_pin;
-    byte opened_state_pin;
-    byte closed_state_pin
-
+  void init();
+  uint8_t open_cmd_pin;
+  uint8_t close_cmd_pin;
+  uint8_t open_state_pin;
+  uint8_t closed_state_pin;
+  char movement = 's'; // s - stop servo valve, o - open valve, c - close valve
+  bool running = false;
 };
 
 #endif // _VALVE_H_
