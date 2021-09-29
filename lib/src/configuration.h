@@ -8,6 +8,8 @@
 //ETHERNET
 #define RESET_PIN               PA0 // Reset of ENC28J60
 
+uint8_t MAC[6] =          {0x02, 0xA1, 0xA5, 0x03, 0x04, 0x05};
+
 //Water flow sensors
 #define INTERRUPT_INT_FLOW      PB9 // internal circuit flow sensor
 #define INTERRUPT_EXT_FLOW      PB8 // external circuit flow sensor
@@ -57,15 +59,8 @@ long    total_mqtt_connection =  0;                // NUmbet of total connection
 
 //VARIABLES
 #define DELAY              10000 // delay in ms
-#define MAX_RPM_COUNTS     80000 //reset rpm counts after reach max
-
-double max_internal_liters = 20;
+double max_internal_liters = 30;
 double max_external_liters = 200;
-//valve states array
-
-// conversion variables
-#define LITER_CONVERSION    288.0 // conversion value 1L => 288 impulses
-
 
 //Failure variables
 int     lan_connection_lost =   0;// Number of MQTT connection lost 

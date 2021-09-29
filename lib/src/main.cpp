@@ -59,16 +59,14 @@
 #include <PubSubClient.h> //MQTT LIBRARY
 #include "configuration.h"
 #include "valve.h"
+#include "flow_sensor.h"
 
 
 // Methodes
 void callback(char* topic, byte* payload, unsigned int length);
 void ethernetReset();
 void mqttConnection();
-void flowInt();
-void flowExt();
 void compareFlow();
-void flowSolve();
 void dataToChar();
 void valveReadState();
 void valveChangeState(int valve_num , int valve_state);
@@ -85,7 +83,6 @@ uint32_t last_time = 0;
 uint32_t last_time_mqtt = 0;
 uint32_t last_time_state = 0;
 
-bool first_run = true;
 bool change_rpm = false;
 bool mqtt_conn = false;
 
@@ -115,23 +112,20 @@ bool valveRun[4] = {0,0,0,0}; // 0- valve1 open, 1-valve1 close, 2-valve2 open, 
 
 Valve val1(V1_OPEN, V1_CLOSE, V1_OPENED, V1_CLOSED);
 Valve val2(V2_OPEN, V2_CLOSE, V2_OPENED, V2_CLOSED);
+FlowSensor flow_sensor1(INTERRUPT_INT_FLOW);
+FlowSensor flow_sensor2(INTERRUPT_EXT_FLOW); 
 
-Ethernet.begin(
-// ------------------ SETUP ---------------------------------------------------------
+
 void setup() {
 
   pinMode(GREEN_LED, OUTPUT); // green LED on Blackpill
-  digitalWrite(PC13, HIGH);
-  pinMode(INTERRUPT_INT_FLOW, INPUT_PULLUP);
-  pinMode(INTERRUPT_EXT_FLOW, INPUT_PULLUP);
+  digitalWrite(GREEN_LED, HIGH); // 
 
-  attachInterrupt(digitalPinToInterrupt(PB9),flowInt, RISING); // interrupt for pulses of internal waterflow sensor
-  attachInterrupt(digitalPinToInterrupt(PB8),flowExt, RISING); // interrupt for pulses of internal waterflow sensor
-  
   Ethernet.begin(MAC);
   delay(1500);
   mqttClient.setServer(MQTT_SERVER_IP,1883);
   mqttClient.setCallback(callback);
+  
 }
 
 // ------------------ LOOP ---------------------------------------------------------
@@ -139,20 +133,15 @@ void loop() {
   // If first run open all valves
   Ethernet.maintain();
   time = millis();
-  if(first_run){
-    mqttConnection();
-    mqttClient.loop();
-    mqttClient.publish(SUBSCRIBE_TOPIC, "1"); // open internal valve
-    mqttClient.publish(SUBSCRIBE_TOPIC, "3"); // open external valve
-    first_run = false;
-  }
 
   // *------------------------Solve liters-----------------------------------------
   if(time-last_time > DELAY){
-    if(rpmInt > 0){
-      flowSolve();
+    if(flow_sensor1.getRPM() > 0){
+      lit_int += flow_sensor1.toLiters();
+      if(flow_sensor2.getRPM() > 0){
+        lit_ext += flow_sensor2.toLiters();
+      }
       compareFlow();
-      rpmInt_last = rpmInt;
       change_rpm = true;
     }else{
       change_rpm = false;
@@ -349,25 +338,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 
-// *------------------------------------------FLOW COMPUTING -------------------------------------------------------
-// increment internal flow sensor pulses
-void flowInt() {
-  rpmInt ++ ;
-}
-
-// increment external flow sensor pulses
-void flowExt() {
-  rpmExt ++ ; // increment external flow sensor pulses
-}
-
-// Flow Solve
-void flowSolve() {
-  lit_int += rpmInt / LITER_CONVERSION;
-  lit_ext += rpmExt / LITER_CONVERSION;
-  rpmInt =  0;
-  rpmExt =  0;
-}
-
 // check liters
 void compareFlow() {
   compareInterLit = lit_int - lit_int_last - lit_ext + lit_ext_last;
@@ -474,3 +444,4 @@ void dataToChar(){
   dtostrf(compareExterLit,6,2,compareExterLit_msg);
   sprintf(connection_failed_char, "%i", connection_failed);
 }
+
