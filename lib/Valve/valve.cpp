@@ -1,7 +1,7 @@
 
 #include "valve.h"
 
-Valve::Valve(byte open_cmd_pin, byte close_cmd_pin, byte open_state_pin, byte closed_state_pin) {
+Valve::Valve(int open_cmd_pin, int close_cmd_pin, int open_state_pin, int closed_state_pin) {
 
   this->open_cmd_pin = open_cmd_pin;
   this->close_cdm_pin = close_cmd_pin;
