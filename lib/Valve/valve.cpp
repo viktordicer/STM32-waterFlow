@@ -78,3 +78,23 @@ bool Valve::isClosed(){
 bool Valve::isRunning(){
   return running;
 }
+
+// Check is servo valve is running and in the end position, then turn off servo. 
+//1 => valve is open , 0 => valve is closed , 2 - servo not running
+int Valve::runningControl(){
+  if(isRunning()){
+    switch(movement){
+      case 'o':
+        if(isOpen()){
+          stopValve();
+        }
+        return 1;
+      case 'c':
+        if(isClosed()){
+          stopValve();
+          return 0;
+        }
+    }
+  } else{
+    return 2; // not running
+  }

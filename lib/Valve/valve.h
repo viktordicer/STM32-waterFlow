@@ -14,6 +14,7 @@ public:
   bool isOpen();
   bool isClosed();
   bool isRunning();
+  int runningControl();
 
 private:
   int open_cmd_pin;
