@@ -2,6 +2,7 @@
 #define VALVE_H_
 
 #include <Arduino.h>
+
 class Valve {
 public:
   Valve(int open_cmd_pin, int close_cmd_pin, int opened_state_pin, int closed_state_pin);
@@ -12,7 +13,9 @@ public:
   void closeValve();
   void stopValve();
   bool isOpen();
+  bool isOpening();
   bool isClosed();
+  bool isClosing();
   bool isRunning();
   int runningControl();
 

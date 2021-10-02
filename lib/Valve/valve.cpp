@@ -4,7 +4,7 @@
 Valve::Valve(int open_cmd_pin, int close_cmd_pin, int open_state_pin, int closed_state_pin) {
 
   this->open_cmd_pin = open_cmd_pin;
-  this->close_cdm_pin = close_cmd_pin;
+  this-> close_cmd_pin = close_cmd_pin;
   this->open_state_pin = open_state_pin;
   this->closed_state_pin = closed_state_pin;
   init();
@@ -16,17 +16,17 @@ void Valve::init(){
   pinMode(open_state_pin, INPUT_PULLUP);
   pinMode(closed_state_pin, INPUT_PULLUP);
   
-  digitalWrite(open_cmd_pin, LOW;
-  digitalWrite(close_cmd_pin, LOW;
+  digitalWrite(open_cmd_pin, LOW);
+  digitalWrite(close_cmd_pin, LOW);
 }
 
 void Valve::checkState(){
   if(movement == 'o'){
-      if(isOpen){
+      if(isOpen()){
           stopValve();
       }
   }else if(movement == 'c'){
-      if(isClosed){
+      if(isClosed()){
           stopValve();
       }
   }
@@ -37,6 +37,7 @@ void Valve::openValve(){
   this->movement = 'o';
   this->running = true;
   digitalWrite(close_cmd_pin, LOW);
+  delay(100);
   digitalWrite(open_cmd_pin, HIGH);
 }
 
@@ -45,6 +46,7 @@ void Valve::closeValve(){
   this->movement = 'c';
   this->running = true;
   digitalWrite(open_cmd_pin, LOW);
+  delay(100);
   digitalWrite(close_cmd_pin, HIGH);
 }
 
@@ -65,12 +67,34 @@ bool Valve::isOpen(){
   }
 }
 
+//Read if servo valve is opening
+bool Valve::isOpening(){
+  if(isRunning()){
+    if(movement == 'o'){
+      return true;
+    }
+  } else{
+    return false;
+  }
+}
+
 // Read closed pin - if is LOW return true
 bool Valve::isClosed(){
   if(digitalRead(closed_state_pin) == LOW) {
       return true;
   } else{
       return false;
+  }
+}
+
+//Read if servo valve is closing
+bool Valve::isClosing(){
+  if(isRunning()){
+    if(movement == 'c'){
+      return true;
+    }
+  } else{
+    return false;
   }
 }
 
@@ -98,3 +122,4 @@ int Valve::runningControl(){
   } else{
     return 2; // not running
   }
+}
