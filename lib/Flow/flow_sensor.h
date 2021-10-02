@@ -9,21 +9,22 @@ public:
   
   uint32_t getRPM();
   void clearRPM();
+  void flowCount();
   double toLiters();
-  void setMaxLiter(double max_liters);
-  void setMaxRpmCount(uint32_t max_rpm_count);
+  double getTotalVolume();
+  void clearTotalVolume();
+  void setMaxVolume(double max_volume);
+  double getMaxVolume();
 
 private:
-
   int interrupt_pin;
   u_int32_t rpm;
 
   double impulse_per_liter = 288.0;
-  uint32_t max_rpm_count = 80000;
-  double max_liters = 20;
+  double max_volume = 20.0;
+  double total_volume = 0.0;
 
   void init();
-  void flowCount();
 
 };
 
