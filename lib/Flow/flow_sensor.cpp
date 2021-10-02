@@ -41,12 +41,3 @@ void FlowSensor::clearTotalVolume(){
   this->total_volume = 0;
 } 
 
-// Set max volume of water in liters. When the value is reached, the servo valve closes automatically.
-void FlowSensor::setMaxVolume(double max_volume){
-  this->max_volume = max_volume;
-}
-
-// Get max volume of water in liters. When the value is reached, the servo valve closes automatically.
-double FlowSensor::getMaxVolume(){
-  return max_volume;
-}

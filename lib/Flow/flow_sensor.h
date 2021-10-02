@@ -13,15 +13,13 @@ public:
   double toLiters();
   double getTotalVolume();
   void clearTotalVolume();
-  void setMaxVolume(double max_volume);
-  double getMaxVolume();
+
 
 private:
   int interrupt_pin;
   u_int32_t rpm;
 
   double impulse_per_liter = 288.0;
-  double max_volume = 20.0;
   double total_volume = 0.0;
 
   void init();
