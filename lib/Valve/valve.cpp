@@ -22,13 +22,13 @@ void Valve::init(){
 
 void Valve::checkState(){
   if(movement == 'o'){
-      if(isOpen()){
-          stopValve();
-      }
+    if(isOpen()){
+        stopValve();
+    }
   }else if(movement == 'c'){
-      if(isClosed()){
-          stopValve();
-      }
+    if(isClosed()){
+        stopValve();
+    }
   }
 }
 
@@ -61,9 +61,9 @@ void Valve::stopValve(){
 // Read opened pin - if is LOW return true
 bool Valve::isOpen(){
   if(digitalRead(open_state_pin) == LOW) {
-      return true;
+    return true;
   } else{
-      return false;
+    return false;
   }
 }
 
@@ -73,18 +73,16 @@ bool Valve::isOpening(){
     if(movement == 'o'){
       return true;
     }
-  } else{
-    return false;
   }
+  return false;
 }
 
 // Read closed pin - if is LOW return true
 bool Valve::isClosed(){
   if(digitalRead(closed_state_pin) == LOW) {
-      return true;
-  } else{
-      return false;
+    return true;
   }
+  return false;
 }
 
 //Read if servo valve is closing
@@ -93,9 +91,8 @@ bool Valve::isClosing(){
     if(movement == 'c'){
       return true;
     }
-  } else{
-    return false;
   }
+  return false;
 }
 
 //Check if servo valve is running
@@ -111,15 +108,14 @@ int Valve::runningControl(){
       case 'o':
         if(isOpen()){
           stopValve();
+          return 1;
         }
-        return 1;
       case 'c':
         if(isClosed()){
           stopValve();
           return 0;
         }
     }
-  } else{
-    return 2; // not running
   }
+  return 2; // not running
 }

@@ -24,7 +24,7 @@ private:
   int close_cmd_pin;
   int open_state_pin;
   int closed_state_pin;
-  char movement = 's'; // s - stop servo valve, o - open valve, c - close valve
+  char movement = 's'; // s - stop servo valve, o - opening valve, c - closing valve
   bool running = false;
   void init();
 };
