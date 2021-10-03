@@ -53,12 +53,13 @@ long    total_mqtt_connection =  0;                // NUmbet of total connection
 #define SUBSCRIBE_TOPIC                  "command/technical/waterflow"
 #define SUBSCRIBE_TOPIC_INT              "sensor/technical/set_internal_max"
 #define SUBSCRIBE_TOPIC_EXT              "sensor/technical/set_external_max"
+#define SUBSCRIBE_TOPIC_STATE            "sensor/technical/get_state"
 // failed
 #define TECHNICAL_CONNECTION_FAILED      "sensor/technical/connection_failed"
 
 
 //VARIABLES
-#define DELAY              10000 // delay in ms
+#define DELAY              8000 // delay in ms
 double max_internal_volume = 30; // max volume for internal servo valve
 double max_external_volume = 200; // max volume for internal servo valve
 
