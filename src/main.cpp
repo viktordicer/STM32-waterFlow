@@ -80,6 +80,7 @@ void sendData();
 void serialPrint(String message);
 void countINT();
 void countEXT();
+void valvePosition();
 
 //------------------------- Program variables
 //NEW Objects
@@ -98,34 +99,32 @@ uint32_t last_time_mqtt = 0;
 
 bool change_rpm = false;
 bool mqtt_conn = false;
+bool first_run = true;
 
 int connection_failed = 0;
+int connection_failed_last = 0;
 char connection_failed_char[10];
 
 //Interior
-uint32_t rpmInt = 0;
-uint32_t rpmInt_last = 0;
 double lit_int = 0;
-double lit_int_last = 0;
 char litInterior[15];
-double compareInterLit = 0;
-char compareInterLit_msg[15];
+double total_inter_volume = 0;
+char total_inter_volume_msg[15];
 
 //Exterior
-uint32_t rpmExt = 0;
 double lit_ext = 0;
-double lit_ext_last = 0;
 char litExterior[15];
-double compareExterLit = 0;
-char compareExterLit_msg[15];
+double total_exter_volume = 0;
+char total_exter_volume_msg[15];
 
 void setup() {
-
   #ifdef DEBUG
     Serial.begin(57600);
+    delay(4000);
     Serial.println("STM32 starting...");
     Serial.println("Debug mode");
   #endif 
+
 
   pinMode(GREEN_LED, OUTPUT); // green LED on Blackpill
   digitalWrite(GREEN_LED, HIGH); // 
@@ -144,7 +143,17 @@ void loop() {
   Ethernet.maintain();
   time = millis();
 
-  // *------------------------Solve liters-----------------------------------------
+  if(first_run){
+    mqttConnection();
+    valvePosition();
+    if(!val1.isOpen()){
+      val1.openValve();
+    }
+
+    first_run = false;
+  }
+
+  // *------------------------Volume-----------------------------------------
   if(time-last_time > DELAY){
     convertToLiters();
     last_time = time;
@@ -161,7 +170,8 @@ void loop() {
         mqttConnection();
       }else{
         serialPrint("MQTT connection is still alive.");
-      }    
+      } 
+    sendData();   
   }
   mqttClient.loop();
   valveState();
@@ -229,27 +239,25 @@ void ethernetReset() {
   mqttClient.setCallback(callback);
 }
 
-// Send liters to mqtt brocker
+// Send data to mqtt brocker
 void sendData(){
   if(mqtt_conn==true){
-
+      serialPrint("mqtt sending data");
       dataToChar();
       mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
       //check changing flow
       if(change_rpm == false && mqtt_conn == true) {
-        if(lit_int != lit_int_last){
-
-          mqttClient.publish(LIT_INT_TOPIC, compareInterLit_msg);
+        if(total_inter_volume > 0){
+          mqttClient.publish(LIT_INT_TOPIC, total_inter_volume_msg);
           mqttClient.publish(LIT_INT_SUM_TOPIC, litInterior);
+          total_inter_volume = 0;
         }
 
-        if(lit_ext != lit_ext_last){
-          mqttClient.publish(LIT_EXT_TOPIC, compareExterLit_msg);
+        if(total_inter_volume > 0){
+          mqttClient.publish(LIT_EXT_TOPIC, total_exter_volume_msg);
           mqttClient.publish(LIT_EXT_SUM_TOPIC, litExterior);
+          total_inter_volume =  0;
         }
-
-        lit_int_last = lit_int;
-        lit_ext_last = lit_ext;
       }
       last_time_mqtt = time;
     }
@@ -268,22 +276,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
     for(int i=0; i<length; i++){
     msg = (uint16_t)payload[i] -48;
     }
-
     // Open valve internal
-    if(msg == 1) {
-      val1.openValve(); //open internal valve
-    // Close valve internal
-    } else if (msg == 2) {
-      if (!val1.isClosing()){
+    switch (msg)
+    {
+    case 1:
+      if(!val1.isOpening() && !val1.isOpen()){
+        val1.openValve(); //open internal valve
+      }
+      break;
+    
+    case 2:
+      if (!val1.isClosing() && !val1.isClosed()) {
         val1.closeValve(); //close internal valve
       }
-    // Open valve external
-    } else if (msg == 3) {
-      val2.openValve(); //open external valve
-
-    // Close valve external
-    } else if (msg == 4) {
-      if (!val2.isClosing()){
+      break;
+    case 3:
+      if(!val2.isOpening() && !val2.isOpen()) {
+        val2.openValve(); //open external valve
+      }
+      break;
+    case 4:
+      if (!val2.isClosing() && !val2.isClosed()) {
         val2.closeValve(); //close external valve
       }
     }
@@ -300,11 +313,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
     max_external_volume = s.toDouble();
     serialPrint(s);
     mqttClient.publish(LIT_EXT_MAX_TOPIC, p, length);
+  }else if(strcmp(topic,SUBSCRIBE_TOPIC_STATE)==0){
+    valvePosition();
   }
-
-  // Free the memory
   free(p);
-  
 }
 
 // RMP of flow - internal flow sensor, attachInterrupt calback function
@@ -319,30 +331,31 @@ void countEXT(){
 
 // *------------------------------------------convert impulses to liters -------------------------------------------------------
 void convertToLiters() {
+  serialPrint(String(flow_sensor1.getRPM()));
   if(flow_sensor1.getRPM() > 0){
-      lit_int += flow_sensor1.toLiters();
+      lit_int = flow_sensor1.toLiters();
       if(flow_sensor2.getRPM() > 0){
-        lit_ext += flow_sensor2.toLiters();
+        lit_ext = flow_sensor2.toLiters();
       }
       compareFlow();
       change_rpm = true;
     }else{
       change_rpm = false;
+      flow_sensor1.clearTotalVolume();
+      flow_sensor2.clearTotalVolume();
     }
 }
 
 // check liters
 void compareFlow() {
-  compareInterLit = lit_int - lit_int_last - lit_ext + lit_ext_last;
-  compareExterLit = lit_ext - lit_ext_last;
-  if(compareInterLit > max_internal_volume){
-    Serial.println(compareInterLit);
+  total_exter_volume = flow_sensor2.getTotalVolume();
+  total_inter_volume = flow_sensor1.getTotalVolume() - total_exter_volume;
+  if(total_inter_volume > max_internal_volume){
     val1.closeValve(); //close internal valve
     mqttClient.publish(SUBSCRIBE_TOPIC, "2");
   }
-  if(compareExterLit > max_external_volume){
+  if(total_exter_volume > max_external_volume){
     // close valve2
-    Serial.println(compareExterLit);
     val2.closeValve(); //close external valve 
     mqttClient.publish(SUBSCRIBE_TOPIC, "4");
 
@@ -377,14 +390,32 @@ void valveState(){
   }
 }
 
+//Get both servo valves position send to MQTT brocker
+void valvePosition(){
+  if(val1.isOpen()){
+    mqttClient.publish(VALVE1_STATE_TOPIC, "opened");
+    mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+  }else if(val1.isClosed()){      
+    mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
+    mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+  }
+  if(val2.isOpen()){
+      mqttClient.publish(VALVE2_STATE_TOPIC, "opened");
+      mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+  }else if(val2.isClosed()){
+      mqttClient.publish(VALVE2_STATE_TOPIC, "closed");
+      mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+  }
+}
+
 
 
 // Convert variables to char - MQTT messages
 void dataToChar(){
   dtostrf(lit_int,8,2,litInterior);
   dtostrf(lit_ext,8,2,litExterior);
-  dtostrf(compareInterLit,6,2,compareInterLit_msg);
-  dtostrf(compareExterLit,6,2,compareExterLit_msg);
+  dtostrf(total_inter_volume,6,2,total_inter_volume_msg);
+  dtostrf(total_exter_volume,6,2,total_exter_volume_msg);
   sprintf(connection_failed_char, "%i", connection_failed);
 }
 
