@@ -25,11 +25,10 @@ void FlowSensor::clearRPM(){
 }
 
 // Convert number of impulses to liters and clear rpm
-double FlowSensor::toLiters(){
+void FlowSensor::toLiters(){
   double liters = rpm / impulse_per_liter;
   clearRPM();
   this->total_volume += liters;
-  return liters;
 }
 
 //Get Total volume, in liters

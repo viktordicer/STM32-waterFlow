@@ -10,7 +10,7 @@ public:
   uint32_t getRPM();
   void clearRPM();
   void flowCount();
-  double toLiters();
+  void toLiters();
   double getTotalVolume();
   void clearTotalVolume();
 
