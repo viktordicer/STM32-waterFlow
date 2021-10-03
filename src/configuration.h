@@ -38,10 +38,8 @@ long    total_mqtt_connection =  0;                // NUmbet of total connection
 
 //TOPICS
 // waterflow sensor liter topic
-#define LIT_INT_TOPIC                    "sensor/technical/lit_inter"
-#define LIT_EXT_TOPIC                    "sensor/technical/lit_exter"
-#define LIT_INT_SUM_TOPIC                "sensor/technical/lit_inter_sum"
-#define LIT_EXT_SUM_TOPIC                "sensor/technical/lit_exter_sum"
+#define LIT_INT_TOPIC                "sensor/technical/lit_inter"
+#define LIT_EXT_TOPIC                "sensor/technical/lit_exter"
 // technical valve state
 #define VALVE1_STATE_TOPIC               "sensor/technical/valve_inter"
 #define VALVE2_STATE_TOPIC               "sensor/technical/valve_exter"
