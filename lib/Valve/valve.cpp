@@ -13,8 +13,8 @@ Valve::Valve(int open_cmd_pin, int close_cmd_pin, int open_state_pin, int closed
 void Valve::init(){
   pinMode(open_cmd_pin, OUTPUT);
   pinMode(close_cmd_pin, OUTPUT);
-  pinMode(open_state_pin, INPUT_PULLUP);
-  pinMode(closed_state_pin, INPUT_PULLUP);
+  pinMode(open_state_pin, INPUT);
+  pinMode(closed_state_pin, INPUT);
   
   digitalWrite(open_cmd_pin, LOW);
   digitalWrite(close_cmd_pin, LOW);
@@ -62,9 +62,8 @@ void Valve::stopValve(){
 bool Valve::isOpen(){
   if(digitalRead(open_state_pin) == LOW) {
     return true;
-  } else{
-    return false;
   }
+  return false;
 }
 
 //Read if servo valve is opening
@@ -110,11 +109,13 @@ int Valve::runningControl(){
           stopValve();
           return 1;
         }
+      break;
       case 'c':
         if(isClosed()){
           stopValve();
           return 0;
         }
+      break;
     }
   }
   return 2; // not running
