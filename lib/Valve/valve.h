@@ -17,6 +17,7 @@ public:
   bool isClosed();
   bool isClosing();
   bool isRunning();
+  int getState();
   int runningControl();
 
 private:
@@ -25,6 +26,7 @@ private:
   int open_state_pin;
   int closed_state_pin;
   char movement = 's'; // s - stop servo valve, o - opening valve, c - closing valve
+  int state = 0;
   bool running = false;
   void init();
 };

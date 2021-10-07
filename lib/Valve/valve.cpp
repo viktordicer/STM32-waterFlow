@@ -36,6 +36,7 @@ void Valve::checkState(){
 void Valve::openValve(){
   this->movement = 'o';
   this->running = true;
+  this->state = 1;
   digitalWrite(close_cmd_pin, LOW);
   delay(100);
   digitalWrite(open_cmd_pin, HIGH);
@@ -45,6 +46,7 @@ void Valve::openValve(){
 void Valve::closeValve(){
   this->movement = 'c';
   this->running = true;
+  this->state = 0;
   digitalWrite(open_cmd_pin, LOW);
   delay(100);
   digitalWrite(close_cmd_pin, HIGH);
@@ -97,6 +99,11 @@ bool Valve::isClosing(){
 //Check if servo valve is running
 bool Valve::isRunning(){
   return running;
+}
+
+// Get state of valve 0- closed 1-open
+int Valve::getState(){
+  return state;
 }
 
 // Check is servo valve is running and in the end position, then turn off servo. 
