@@ -80,7 +80,8 @@ void sendData();
 void serialPrint(String message);
 void countINT();
 void countEXT();
-void valvePosition();
+void getStatus();
+void maxValToChar();
 
 //------------------------- Program variables
 //NEW Objects
@@ -113,6 +114,10 @@ char total_inter_volume_msg[15];
 double total_exter_volume = 0;
 char total_exter_volume_msg[15];
 
+//Max valuer
+char max_int_volume_char[15];
+char max_ext_volume_char[15];
+
 void setup() {
   #ifdef DEBUG
     Serial.begin(57600);
@@ -142,7 +147,7 @@ void loop() {
   if(first_run){
     mqttConnection();
     mqttClient.publish(TECHNICAL_CONNECTION_FAILED, "0");
-    //valvePosition();
+    //getStatus();
     if(!val1.isOpen()){
       val1.openValve();
     }
@@ -329,7 +334,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     serialPrint(s);
     mqttClient.publish(LIT_EXT_MAX_TOPIC, p, length);
   }else if(strcmp(topic,SUBSCRIBE_TOPIC_STATE)==0){
-    valvePosition();
+    getStatus();
   }
   free(p);
 }
@@ -409,21 +414,40 @@ void valveState(){
 }
 
 //Get both servo valves position, send to MQTT brocker
-void valvePosition(){
-  if(val1.isOpen()){
-    mqttClient.publish(VALVE1_STATE_TOPIC, "open");
-    mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
-  }else if(val1.isClosed()){      
-    mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
-    mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
-  }
-  if(val2.isOpen()){
-      mqttClient.publish(VALVE2_STATE_TOPIC, "open");
+void getStatus(){
+  maxValToChar();
+  switch(val1.get_state()) {
+    case 0:
+      mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
-  }else if(val2.isClosed()){
+      serialPrint("Internal closed");
+      break;
+
+    case 1:
+      mqttClient.publish(VALVE1_STATE_TOPIC, "open");
+      mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      serialPrint("Internal open");
+      break;
+  }
+
+  switch(val1.get_state()) {
+    case 0:
       mqttClient.publish(VALVE2_STATE_TOPIC, "closed");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      serialPrint("External closed");
+      break;
+
+    case 1:
+      mqttClient.publish(VALVE2_STATE_TOPIC, "open");
+      mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      serialPrint("External open");
+      break;
   }
+
+  mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
+  mqttClient.publish(LIT_INT_MAX_TOPIC, max_int_volume_char);
+  mqttClient.publish(LIT_INT_MAX_TOPIC, max_ext_volume_char);
+
 }
 
 // Convert variables to char - MQTT messages
@@ -431,6 +455,13 @@ void dataToChar(){
   dtostrf(total_inter_volume,6,2,total_inter_volume_msg);
   dtostrf(total_exter_volume,6,2,total_exter_volume_msg);
   sprintf(connection_failed_char, "%i", connection_failed);
+}
+
+//Convert max liters to char - mqtt messages
+void maxValToChar(){ 
+  dtostrf(max_internal_volume,6,2,max_int_volume_char);
+  dtostrf(max_external_volume,6,2,max_ext_volume_char);
+
 }
 
 // Serial print if debug mode is on
