@@ -14,6 +14,12 @@
   INT3  ----> PB3      //MOTOR B Yellow (YELLOW)
   INT4  ----> PA15     //MOTOR B Blue (GREEN)
 
+  I2C EEPROM AT24C02
+    VCC ----> 5V
+    GND ----> GND
+    SCL ----> PB6    
+    SDA ----> PB7
+
   Flow sensor for INTERNAL circuit
     int0 ----> PB9
 
@@ -21,8 +27,8 @@
     int0 ----> PB8
 
   Servo valve INTERNAL
-    open_valve    ----> PB7
-    close_valve   ----> PB6
+    open_valve    ----> PB5
+    close_valve   ----> PB4
     opened_state  ----> PB12   Green (GREY)
     closed_state  ----> PB13  Red (WHITE)
     GND           ----> GND   Black (BROWN)
@@ -61,9 +67,16 @@
 #include "configuration.h"
 #include "valve.h"
 #include "flow_sensor.h"
+#include "Wire.h"
+#include "I2C_eeprom.h"
 
 // DEBUG MODE DEFINE - in debug mode serial print is on
-//#define DEBUG
+#define DEBUG
+#ifdef DEBUG
+  #define serialPrint(x) Serial.println(x)
+#elif
+  #define serialPrint(x)
+#endif
 
 
 // Methodes
@@ -77,16 +90,19 @@ void dataToChar();
 void convertToLiters();
 void valveState();
 void sendData();
-void serialPrint(String message);
 void countINT();
 void countEXT();
 void getStatus();
 void maxValToChar();
+void readEEprom(); //total volume
+void writeEEprom(uint16_t memory_address, float volume);  //total volume
 
 //------------------------- Program variables
 //NEW Objects
 EthernetClient ethClient;
 PubSubClient mqttClient(MQTT_SERVER_IP, 1883, callback, ethClient);
+
+I2C_eeprom ee(0x50, I2C_DEVICESIZE_24LC16);
 
 Valve val1(V1_OPEN, V1_CLOSE, V1_OPENED, V1_CLOSED); //servo valve - internal
 Valve val2(V2_OPEN, V2_CLOSE, V2_OPENED, V2_CLOSED); //servo valve - external
@@ -97,6 +113,7 @@ FlowSensor flow_sensor2(INTERRUPT_EXT_FLOW); // flow sensor external
 uint32_t time = 0;
 uint32_t last_time = 0;
 uint32_t last_time_mqtt = 0;
+uint32_t last_time_eeprom = 0;
 
 bool change_rpm = false;
 bool mqtt_conn = false;
@@ -107,11 +124,13 @@ int connection_failed_last = 0;
 char connection_failed_char[10];
 
 //Interior
-double total_inter_volume = 0;
+float inc_inter_volume = 0;
+char inc_inter_volume_msg[15];
 char total_inter_volume_msg[15];
 
 //Exterior
-double total_exter_volume = 0;
+float inc_exter_volume = 0;
+char inc_exter_volume_msg[15];
 char total_exter_volume_msg[15];
 
 //Max valuer
@@ -126,17 +145,17 @@ void setup() {
     Serial.println("Debug mode");
   #endif 
 
-
   pinMode(GREEN_LED, OUTPUT); // green LED on Blackpill
   digitalWrite(GREEN_LED, HIGH); // 
   attachInterrupt(digitalPinToInterrupt(INTERRUPT_INT_FLOW), countINT, RISING);
   attachInterrupt(digitalPinToInterrupt(INTERRUPT_EXT_FLOW), countEXT, RISING);
 
+  ee.begin();
+
   Ethernet.begin(MAC);
   delay(1500);
   mqttClient.setServer(MQTT_SERVER_IP,1883);
   mqttClient.setCallback(callback);
-  
 }
 
 // ------------------ LOOP ---------------------------------------------------------
@@ -147,10 +166,10 @@ void loop() {
   if(first_run){
     mqttConnection();
     mqttClient.publish(TECHNICAL_CONNECTION_FAILED, "0");
-    //getStatus();
     if(!val1.isOpen()){
       val1.openValve();
     }
+    readEEprom();
     first_run = false;
   }
 
@@ -173,170 +192,10 @@ void loop() {
       } 
     sendData(); //send data to MQTT broker   
   }
+  
   mqttClient.loop();
   delay(100);
   valveState();
-}
-
-
-// *--------------------- MQTT CONNECTION --------------------
-void mqttConnection() {
-  int connectionAtempt = 1;
-  if(!mqttClient.connected()){
-    while (!mqttClient.connected()) {
-      //after 2 atempts end trying connection
-      if(connectionAtempt > 3 ){
-        digitalWrite(GREEN_LED, LOW);
-        mqttClient.disconnect();
-        delay(300);
-        ethernetReset();
-        connection_failed ++;
-        mqtt_conn = false;
-        serialPrint("Can't connect to the mqtt.");
-        return;
-      }
-      serialPrint("Attempting MQTT connection...");
-
-      if (mqttClient.connect(MQTT_CLIENT_ID, USERNAME, PASSWORD )) {
-        serialPrint("MQTT connected");
-        mqttClient.subscribe(SUBSCRIBE_TOPIC);
-        mqttClient.subscribe(SUBSCRIBE_TOPIC_INT);
-        mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
-        digitalWrite(GREEN_LED, HIGH);
-        mqtt_conn = true;
-      } else {
-        serialPrint(" try again in 2 seconds");
-        delay(1000);
-        connectionAtempt ++;
-        digitalWrite(GREEN_LED, LOW);
-        //ethernetReset();
-      }
-    }
-  }
-  delay(200);
-}
-
-
-// *----------------------RESET ETHERNET---------------
-void ethernetReset() {
-  //Define reset pin for W5500
-  serialPrint("Reseting ethernet adapter");
-  pinMode(RESET_PIN, OUTPUT);
-  digitalWrite(RESET_PIN, LOW);
-  delay(100);
-  digitalWrite(RESET_PIN,HIGH);
-  delay(100);
-  pinMode(RESET_PIN, INPUT);
-  delay(100);
-  serialPrint("Initialize ethernet");
-  Ethernet.begin(MAC);
-
-  //delay with ethernet maintain
-  for (int i = 0; i <= 10; i++) {
-    delay(100);
-    Ethernet.maintain();
-  }
-  mqttClient.setServer(MQTT_SERVER_IP,1883);
-  mqttClient.setCallback(callback);
-}
-
-// Send data to mqtt brocker
-void sendData(){
-  if(mqtt_conn==true){
-      serialPrint("mqtt sending data");
-      dataToChar();
-      if(connection_failed != connection_failed_last){
-        mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
-        connection_failed_last=connection_failed;
-      }
-      //check changing flow
-      if(change_rpm == false && mqtt_conn == true) {
-        if(total_inter_volume > 0){
-          mqttClient.publish(LIT_INT_TOPIC, total_inter_volume_msg);
-          total_inter_volume = 0;
-        }
-
-        if(total_exter_volume > 0){
-          mqttClient.publish(LIT_EXT_TOPIC, total_exter_volume_msg);
-          total_exter_volume =  0;
-        }
-      }
-      last_time_mqtt = time;
-    }
-}
-
-
-// *MQTT CALLBACK 
-void callback(char* topic, byte* payload, unsigned int length) {
-
-  byte* p = (byte*)malloc(length);
-  // Copy the payload to the new buffer
-  memcpy(p,payload,length);
-  
-  if(strcmp(topic,SUBSCRIBE_TOPIC)==0){
-    int msg;
-    for(int i=0; i<length; i++){
-    msg = (uint16_t)payload[i] -48;
-    }
-    // Open valve internal
-    serialPrint("callback valve command");
-    serialPrint(String(msg));
-    switch (msg)
-    {
-    
-    case 1:
-      serialPrint("Open internal valve");
-      serialPrint(String(val1.isOpening()));
-      serialPrint(String(val1.isOpen()));
-      if(!val1.isOpening() && !val1.isOpen()){
-        val1.openValve(); //open internal valve
-      }
-      break;
-    
-    case 2:
-      serialPrint("Close internal valve");
-      serialPrint(String(val1.isClosing()));
-      serialPrint(String(val1.isClosed()));
-      if (!val1.isClosing() && !val1.isClosed()) {
-        val1.closeValve(); //close internal valve
-      }
-      break;
-    case 3:
-      serialPrint("Open external valve");
-      serialPrint(String(val2.isOpening()));
-      serialPrint(String(val2.isOpen()));
-      if(!val2.isOpening() && !val2.isOpen()) {
-        serialPrint("Open external command");
-        val2.openValve(); //open external valve
-        serialPrint(String(val2.isRunning()));
-      }
-      break;
-    case 4:
-      serialPrint("Close external valve");
-      serialPrint(String(val2.isClosing()));
-      serialPrint(String(val2.isClosed()));
-      if (!val2.isClosing() && !val2.isClosed()) {
-        val2.closeValve(); //close external valve
-      }
-      break;
-    }
-  }else if(strcmp(topic,SUBSCRIBE_TOPIC_INT)==0){
-    payload[length] = '\0';
-    String s = String((char*)payload);
-    max_internal_volume = s.toDouble();
-    serialPrint(s);
-    mqttClient.publish(LIT_INT_MAX_TOPIC, p, length);
-  
-  }else if(strcmp(topic,SUBSCRIBE_TOPIC_EXT)==0){
-    payload[length] = '\0';
-    String s = String((char*)payload);
-    max_external_volume = s.toDouble();
-    serialPrint(s);
-    mqttClient.publish(LIT_EXT_MAX_TOPIC, p, length);
-  }else if(strcmp(topic,SUBSCRIBE_TOPIC_STATE)==0){
-    getStatus();
-  }
-  free(p);
 }
 
 // RMP of flow - internal flow sensor, attachInterrupt calback function
@@ -347,38 +206,6 @@ void countINT(){
 // RMP of flow - external flow sensor, attachInterrupt calback function
 void countEXT(){
   flow_sensor2.flowCount(); 
-}
-
-// *------------------------------------------convert impulses to liters -------------------------------------------------------
-void convertToLiters() {
-  serialPrint(String(flow_sensor1.getRPM()));
-  if(flow_sensor1.getRPM() > 0){
-      flow_sensor1.toLiters();
-      if(flow_sensor2.getRPM() > 0){
-        flow_sensor2.toLiters();
-      }
-      compareFlow();
-      change_rpm = true;
-    }else{
-      change_rpm = false;
-      flow_sensor1.clearTotalVolume();
-      flow_sensor2.clearTotalVolume();
-    }
-}
-
-// check liters
-void compareFlow() {
-  total_exter_volume = flow_sensor2.getTotalVolume();
-  total_inter_volume = flow_sensor1.getTotalVolume() - total_exter_volume;
-  if(total_inter_volume > max_internal_volume){
-    val1.closeValve(); //close internal valve
-    mqttClient.publish(SUBSCRIBE_TOPIC, "2");
-  }
-  if(total_exter_volume > max_external_volume){
-    // close valve2
-    val2.closeValve(); //close external valve 
-    mqttClient.publish(SUBSCRIBE_TOPIC, "4");
-  }
 }
 
 //Check both servo valves if is ruuning and if in in the ending position
@@ -413,33 +240,99 @@ void valveState(){
   }
 }
 
+// Send data to mqtt brocker
+void sendData(){
+  if(mqtt_conn==true){
+      serialPrint("mqtt sending data");
+      dataToChar();
+      if(connection_failed != connection_failed_last){
+        mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
+        connection_failed_last=connection_failed;
+      }
+      //check changing flow
+      if(change_rpm == false && mqtt_conn == true) {
+        if(inc_inter_volume > 0){
+          mqttClient.publish(LIT_INT_TOPIC, inc_inter_volume_msg);
+          delay(100);
+          mqttClient.publish(LIT_INT_TOTAL_TOPIC, total_inter_volume_msg);
+          writeEEprom(0x00, flow_sensor1.getTotalVolume());
+          inc_inter_volume = 0;
+        }
+
+        if(inc_exter_volume > 0){
+          mqttClient.publish(LIT_EXT_TOPIC, inc_exter_volume_msg);
+          delay(100);
+          mqttClient.publish(LIT_EXT_TOTAL_TOPIC, total_exter_volume_msg);
+          writeEEprom(0x10, flow_sensor2.getTotalVolume());
+          inc_exter_volume =  0;
+        }
+      }
+      last_time_mqtt = time;
+    }
+}
+// *------------------------------------------convert impulses to liters -------------------------------------------------------
+void convertToLiters() {
+  serialPrint(String(flow_sensor1.getRPM()));
+  if(flow_sensor1.getRPM() > 0){
+      flow_sensor1.toLiters();
+      if(flow_sensor2.getRPM() > 0){
+        flow_sensor2.toLiters();
+      }
+      compareFlow();
+      change_rpm = true;
+    }else{
+      change_rpm = false;
+      flow_sensor1.clearIncVolume();
+      flow_sensor2.clearIncVolume();
+    }
+}
+
+// check liters
+void compareFlow() {
+  inc_exter_volume = flow_sensor2.getIncVolume();
+  inc_inter_volume = flow_sensor1.getIncVolume() - inc_exter_volume;
+  if(inc_inter_volume > max_internal_volume){
+    val1.closeValve(); //close internal valve
+    mqttClient.publish(SUBSCRIBE_TOPIC, "2");
+  }
+  if(inc_exter_volume > max_external_volume){
+    // close valve2
+    val2.closeValve(); //close external valve 
+    mqttClient.publish(SUBSCRIBE_TOPIC, "4");
+  }
+}
+
 //Get both servo valves position, send to MQTT brocker
 void getStatus(){
   maxValToChar();
-  switch(val1.get_state()) {
+  switch(val1.getState()) {
     case 0:
       mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      mqttClient.publish(SUBSCRIBE_TOPIC, "2");
       serialPrint("Internal closed");
       break;
 
     case 1:
       mqttClient.publish(VALVE1_STATE_TOPIC, "open");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      mqttClient.publish(SUBSCRIBE_TOPIC, "1");
       serialPrint("Internal open");
       break;
   }
 
-  switch(val1.get_state()) {
+  switch(val1.getState()) {
     case 0:
       mqttClient.publish(VALVE2_STATE_TOPIC, "closed");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      mqttClient.publish(SUBSCRIBE_TOPIC, "4");
       serialPrint("External closed");
       break;
 
     case 1:
       mqttClient.publish(VALVE2_STATE_TOPIC, "open");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+      mqttClient.publish(SUBSCRIBE_TOPIC, "3");
       serialPrint("External open");
       break;
   }
@@ -452,8 +345,10 @@ void getStatus(){
 
 // Convert variables to char - MQTT messages
 void dataToChar(){
-  dtostrf(total_inter_volume,6,2,total_inter_volume_msg);
-  dtostrf(total_exter_volume,6,2,total_exter_volume_msg);
+  dtostrf(inc_inter_volume,6,2,inc_inter_volume_msg);
+  dtostrf(inc_exter_volume,6,2,inc_exter_volume_msg);
+  dtostrf(flow_sensor1.getTotalVolume(),7,3,total_inter_volume_msg);
+  dtostrf(flow_sensor2.getTotalVolume(),7,3,total_exter_volume_msg);
   sprintf(connection_failed_char, "%i", connection_failed);
 }
 
@@ -464,9 +359,157 @@ void maxValToChar(){
 
 }
 
-// Serial print if debug mode is on
-void serialPrint(String message){
-  #ifdef DEBUG
-    Serial.println(message);
-  #endif
+// *--------------------- MQTT CONNECTION --------------------
+void mqttConnection() {
+  int connectionAtempt = 1;
+  if(!mqttClient.connected()){
+    while (!mqttClient.connected()) {
+      //after 2 atempts end trying connection
+      if(connectionAtempt > 3 ){
+        digitalWrite(GREEN_LED, LOW);
+        mqttClient.disconnect();
+        delay(300);
+        ethernetReset();
+        connection_failed ++;
+        mqtt_conn = false;
+        serialPrint("Can't connect to the mqtt.");
+        return;
+      }
+      serialPrint("Attempting MQTT connection...");
+
+      if (mqttClient.connect(MQTT_CLIENT_ID, USERNAME, PASSWORD )) {
+        serialPrint("MQTT connected");
+        mqttClient.subscribe(SUBSCRIBE_TOPIC);
+        mqttClient.subscribe(SUBSCRIBE_TOPIC_INT);
+        mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
+        mqttClient.publish(STATUS_TOPIC, "online");
+        digitalWrite(GREEN_LED, HIGH);
+        mqtt_conn = true;
+      } else {
+        serialPrint(" try again in 2 seconds");
+        delay(1000);
+        connectionAtempt ++;
+        digitalWrite(GREEN_LED, LOW);
+      }
+    }
+  }
+  delay(200);
+}
+// Read total volume from I2C EEPROM
+void readEEprom(){
+  float volume_in;
+  float volume_ex;
+  uint8_t buffer_in[8];
+  uint8_t buffer_ex[8];
+
+  ee.readBlock(0x00, buffer_in, 8);
+  ee.readBlock(0x10, buffer_ex, 8);
+
+  memcpy((void *)&volume_in, buffer_in, 4);
+  memcpy((void *)&volume_ex, buffer_ex, 4);
+  flow_sensor1.setTotalVolume(volume_in);
+  flow_sensor2.setTotalVolume(volume_ex);
+
+}
+void writeEEprom(uint16_t memory_address, float volume){
+
+  uint8_t buffer[4];
+
+  memcpy( buffer,(void *)&volume, 4);
+  ee.writeBlock(memory_address, buffer, 4);
+}
+
+// *----------------------RESET ETHERNET---------------
+void ethernetReset() {
+  //Define reset pin for W5500
+  serialPrint("Reseting ethernet adapter");
+  pinMode(RESET_PIN, OUTPUT);
+  digitalWrite(RESET_PIN, LOW);
+  delay(100);
+  digitalWrite(RESET_PIN,HIGH);
+  delay(100);
+  pinMode(RESET_PIN, INPUT);
+  delay(100);
+  serialPrint("Initialize ethernet");
+
+  Ethernet.begin(MAC);
+  delay(1500);
+  mqttClient.setServer(MQTT_SERVER_IP,1883);
+  mqttClient.setCallback(callback);
+}
+// *MQTT CALLBACK 
+void callback(char* topic, byte* payload, unsigned int length) {
+
+  byte* p = (byte*)malloc(length);
+  // Copy the payload to the new buffer
+  memcpy(p,payload,length);
+  
+  if(strcmp(topic,SUBSCRIBE_TOPIC)==0){
+    int msg;
+    for(int i=0; i<length; i++){
+    msg = (uint16_t)payload[i] -48;
+    }
+    // Open valve internal
+    serialPrint("callback valve command");
+    serialPrint(String(msg));
+    switch (msg)
+    {
+    
+    case 1:
+      serialPrint("Open internal valve");
+      serialPrint(String(val1.isOpening()));
+      serialPrint(String(val1.isOpen()));
+      if(!val1.isOpening() && !val1.isOpen()){
+        val1.openValve(); //open internal valve
+        mqttClient.publish(VALVE1_STATE_TOPIC, "opening");
+      }
+      break;
+    
+    case 2:
+      serialPrint("Close internal valve");
+      serialPrint(String(val1.isClosing()));
+      serialPrint(String(val1.isClosed()));
+      if (!val1.isClosing() && !val1.isClosed()) {
+        val1.closeValve(); //close internal valve
+        mqttClient.publish(VALVE1_STATE_TOPIC, "closing");
+      }
+      break;
+    case 3:
+      serialPrint("Open external valve");
+      serialPrint(String(val2.isOpening()));
+      serialPrint(String(val2.isOpen()));
+      if(!val2.isOpening() && !val2.isOpen()) {
+        serialPrint("Open external command");
+        val2.openValve(); //open external valve
+        serialPrint(String(val2.isRunning()));
+        mqttClient.publish(VALVE2_STATE_TOPIC, "opening");
+      }
+      break;
+    case 4:
+      serialPrint("Close external valve");
+      serialPrint(String(val2.isClosing()));
+      serialPrint(String(val2.isClosed()));
+      if (!val2.isClosing() && !val2.isClosed()) {
+        val2.closeValve(); //close external valve
+        mqttClient.publish(VALVE2_STATE_TOPIC, "closing");
+      }
+      break;
+    }
+  }else if(strcmp(topic,SUBSCRIBE_TOPIC_INT)==0){
+    payload[length] = '\0';
+    String s = String((char*)payload);
+    max_internal_volume = s.toFloat();
+    serialPrint(s);
+    mqttClient.publish(LIT_INT_MAX_TOPIC, p, length);
+  
+  }else if(strcmp(topic,SUBSCRIBE_TOPIC_EXT)==0){
+    payload[length] = '\0';
+    String s = String((char*)payload);
+    max_external_volume = s.toFloat();
+    serialPrint(s);
+    mqttClient.publish(LIT_EXT_MAX_TOPIC, p, length);
+  }else if(strcmp(topic,HA_TOPIC)==0){
+    getStatus();
+  }
+  free(p);
 }

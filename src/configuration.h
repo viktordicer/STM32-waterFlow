@@ -15,8 +15,8 @@ uint8_t MAC[6] =          {0x02, 0xA1, 0xA5, 0x03, 0x04, 0x05};
 #define INTERRUPT_EXT_FLOW      PB8 // external circuit flow sensor
 
 //VALVE 1
-#define V1_OPEN                 PB7   // internal valve open command
-#define V1_CLOSE                PB6   // internal valve close command
+#define V1_OPEN                 PB5   // internal valve open command
+#define V1_CLOSE                PB4   // internal valve close command
 #define V1_OPENED               PB12   // internal valve opened state
 #define V1_CLOSED               PB13   // internal valve closed state
 
@@ -33,13 +33,16 @@ uint8_t MAC[6] =          {0x02, 0xA1, 0xA5, 0x03, 0x04, 0x05};
 #define USERNAME                 "viktor"         // username MQTT broker
 #define PASSWORD                 "viktor"         // password MQTT broker
 #define MQTT_CHECK_CONNECTION    20000            // check connection is alive in ms 
-long    total_mqtt_connection =  0;                // NUmbet of total connection call
-#define MQTT_SENDING_DEALY       50 // mqtt delay between publish
 
 //TOPICS
+#define HA_TOPIC                         "homeassistant/status"
+#define STATUS_TOPIC                     "sensor/technical/status"
+
 // waterflow sensor liter topic
-#define LIT_INT_TOPIC                "sensor/technical/lit_inter"
-#define LIT_EXT_TOPIC                "sensor/technical/lit_exter"
+#define LIT_INT_TOPIC                    "sensor/technical/lit_inter"
+#define LIT_INT_TOTAL_TOPIC              "sensor/technical/lit_inter_total"
+#define LIT_EXT_TOPIC                    "sensor/technical/lit_exter"
+#define LIT_EXT_TOTAL_TOPIC              "sensor/technical/lit_exter_total"
 // technical valve state
 #define VALVE1_STATE_TOPIC               "sensor/technical/valve_inter"
 #define VALVE2_STATE_TOPIC               "sensor/technical/valve_exter"
@@ -51,7 +54,6 @@ long    total_mqtt_connection =  0;                // NUmbet of total connection
 #define SUBSCRIBE_TOPIC                  "command/technical/waterflow"
 #define SUBSCRIBE_TOPIC_INT              "sensor/technical/set_internal_max"
 #define SUBSCRIBE_TOPIC_EXT              "sensor/technical/set_external_max"
-#define SUBSCRIBE_TOPIC_STATE            "sensor/technical/get_state"
 // failed
 #define TECHNICAL_CONNECTION_FAILED      "sensor/technical/connection_failed"
 
@@ -63,7 +65,7 @@ double max_external_volume = 200; // max volume for internal servo valve
 
 //Failure variables
 int     lan_connection_lost =   0;// Number of MQTT connection lost 
-#define VALVE_PROTECTION_PERIOD 10000 // automatically turn off servo valve when no feedback from internal switch
+#define VALVE_PROTECTION_PERIOD 12000 // automatically turn off servo valve when no feedback from internal switch
 
 #endif // _CONFIGURATION_H_
 

@@ -8,5 +8,6 @@
         "vector": "cpp",
         "string_view": "cpp",
         "initializer_list": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "D:/ELEKTRO/STM32_waterFlow/.pio/libdeps/blackpill_f401cc/ArduinoJson"
 }

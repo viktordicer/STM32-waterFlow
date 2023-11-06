@@ -7,20 +7,22 @@ class FlowSensor {
 public:
   FlowSensor(int interrupt_pin);
   
-  uint32_t getRPM();
-  void clearRPM();
-  void flowCount();
-  void toLiters();
-  double getTotalVolume();
-  void clearTotalVolume();
+  uint32_t  getRPM();
+  void      clearRPM();
+  void      flowCount();
+  void      toLiters();
+  float     getTotalVolume();
+  void      setTotalVolume(float volume);
+  float     getIncVolume();
+  void      clearIncVolume();
 
 
 private:
   int interrupt_pin;
-  u_int32_t rpm;
-
-  double impulse_per_liter = 288.0;
-  double total_volume = 0.0;
+  uint32_t rpm;
+  float impulse_per_liter = 288.0;
+  float inc_volume = 0.0; 
+  float total_volume = 0.0;
 
   void init();
 
