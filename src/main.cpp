@@ -192,7 +192,6 @@ void loop() {
       } 
     sendData(); //send data to MQTT broker   
   }
-  
   mqttClient.loop();
   delay(100);
   valveState();
@@ -255,7 +254,9 @@ void sendData(){
           mqttClient.publish(LIT_INT_TOPIC, inc_inter_volume_msg);
           delay(100);
           mqttClient.publish(LIT_INT_TOTAL_TOPIC, total_inter_volume_msg);
-          writeEEprom(0x00, flow_sensor1.getTotalVolume());
+          if(inc_inter_volume > 3){
+            writeEEprom(0x00, flow_sensor1.getTotalVolume());
+          }
           inc_inter_volume = 0;
         }
 
@@ -263,7 +264,9 @@ void sendData(){
           mqttClient.publish(LIT_EXT_TOPIC, inc_exter_volume_msg);
           delay(100);
           mqttClient.publish(LIT_EXT_TOTAL_TOPIC, total_exter_volume_msg);
-          writeEEprom(0x10, flow_sensor2.getTotalVolume());
+          if(inc_exter_volume > 5){
+            writeEEprom(0x10, flow_sensor2.getTotalVolume());
+          }
           inc_exter_volume =  0;
         }
       }
@@ -304,7 +307,13 @@ void compareFlow() {
 
 //Get both servo valves position, send to MQTT brocker
 void getStatus(){
+  if(!mqttClient.connected()){
+    mqttConnection();
+  }
   maxValToChar();
+  dataToChar();
+  mqttClient.publish(STATUS_TOPIC, "online");
+
   switch(val1.getState()) {
     case 0:
       mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
@@ -336,11 +345,17 @@ void getStatus(){
       serialPrint("External open");
       break;
   }
-
+  mqttClient.publish(LIT_INT_TOTAL_TOPIC, total_inter_volume_msg);
+  delay(50);
+  mqttClient.publish(LIT_INT_TOTAL_TOPIC, total_exter_volume_msg);
+  delay(50);
   mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
+  delay(50);
+  mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
+  delay(50);
   mqttClient.publish(LIT_INT_MAX_TOPIC, max_int_volume_char);
+  delay(50);
   mqttClient.publish(LIT_INT_MAX_TOPIC, max_ext_volume_char);
-
 }
 
 // Convert variables to char - MQTT messages
@@ -356,7 +371,6 @@ void dataToChar(){
 void maxValToChar(){ 
   dtostrf(max_internal_volume,6,2,max_int_volume_char);
   dtostrf(max_external_volume,6,2,max_ext_volume_char);
-
 }
 
 // *--------------------- MQTT CONNECTION --------------------
@@ -379,8 +393,9 @@ void mqttConnection() {
 
       if (mqttClient.connect(MQTT_CLIENT_ID, USERNAME, PASSWORD )) {
         serialPrint("MQTT connected");
-        mqttClient.subscribe(SUBSCRIBE_TOPIC);
+        mqttClient.subscribe(HA_TOPIC);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_INT);
+        mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
         mqttClient.publish(STATUS_TOPIC, "online");
         digitalWrite(GREEN_LED, HIGH);
@@ -395,6 +410,7 @@ void mqttConnection() {
   }
   delay(200);
 }
+
 // Read total volume from I2C EEPROM
 void readEEprom(){
   float volume_in;
@@ -409,7 +425,6 @@ void readEEprom(){
   memcpy((void *)&volume_ex, buffer_ex, 4);
   flow_sensor1.setTotalVolume(volume_in);
   flow_sensor2.setTotalVolume(volume_ex);
-
 }
 void writeEEprom(uint16_t memory_address, float volume){
 
@@ -509,7 +524,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
     serialPrint(s);
     mqttClient.publish(LIT_EXT_MAX_TOPIC, p, length);
   }else if(strcmp(topic,HA_TOPIC)==0){
-    getStatus();
+    String msg;
+    for(int i=0; i<length; i++){
+      msg += (char)payload[i]; 
+    }
+    if(msg == "online"){
+      getStatus();
+    }
   }
   free(p);
 }
