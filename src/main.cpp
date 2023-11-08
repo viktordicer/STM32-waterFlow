@@ -165,7 +165,7 @@ void loop() {
 
   if(first_run){
     mqttConnection();
-    mqttClient.publish(TECHNICAL_CONNECTION_FAILED, "0");
+    getStatus();
     if(!val1.isOpen()){
       val1.openValve();
     }
@@ -351,11 +351,13 @@ void getStatus(){
   delay(50);
   mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
   delay(50);
-  mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
-  delay(50);
   mqttClient.publish(LIT_INT_MAX_TOPIC, max_int_volume_char);
   delay(50);
-  mqttClient.publish(LIT_INT_MAX_TOPIC, max_ext_volume_char);
+  mqttClient.publish(LIT_EXT_MAX_TOPIC, max_ext_volume_char);
+  delay(50);
+  mqttClient.publish(LIT_INT_TOPIC, inc_inter_volume_msg);
+  delay(50);
+  mqttClient.publish(LIT_EXT_TOPIC, inc_exter_volume_msg);
 }
 
 // Convert variables to char - MQTT messages
@@ -394,6 +396,7 @@ void mqttConnection() {
       if (mqttClient.connect(MQTT_CLIENT_ID, USERNAME, PASSWORD )) {
         serialPrint("MQTT connected");
         mqttClient.subscribe(HA_TOPIC);
+        mqttClient.subscribe(SUBSCRIBE_TOPIC);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_INT);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
         mqttClient.subscribe(SUBSCRIBE_TOPIC_EXT);
