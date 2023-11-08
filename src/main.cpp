@@ -151,6 +151,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(INTERRUPT_EXT_FLOW), countEXT, RISING);
 
   ee.begin();
+  readEEprom();
 
   Ethernet.begin(MAC);
   delay(1500);
@@ -169,7 +170,6 @@ void loop() {
     if(!val1.isOpen()){
       val1.openValve();
     }
-    readEEprom();
     first_run = false;
   }
 
@@ -314,40 +314,35 @@ void getStatus(){
   dataToChar();
   mqttClient.publish(STATUS_TOPIC, "online");
 
-  switch(val1.getState()) {
-    case 0:
+  if(val1.isClosed()) {
       mqttClient.publish(VALVE1_STATE_TOPIC, "closed");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
       mqttClient.publish(SUBSCRIBE_TOPIC, "2");
       serialPrint("Internal closed");
-      break;
-
-    case 1:
+  }
+  if(val1.isOpen()) {
       mqttClient.publish(VALVE1_STATE_TOPIC, "open");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
       mqttClient.publish(SUBSCRIBE_TOPIC, "1");
       serialPrint("Internal open");
-      break;
   }
 
-  switch(val1.getState()) {
-    case 0:
-      mqttClient.publish(VALVE2_STATE_TOPIC, "closed");
-      mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
-      mqttClient.publish(SUBSCRIBE_TOPIC, "4");
-      serialPrint("External closed");
-      break;
-
-    case 1:
+  if(val2.isClosed()) {
+    mqttClient.publish(VALVE2_STATE_TOPIC, "closed");
+    mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
+    mqttClient.publish(SUBSCRIBE_TOPIC, "4");
+    serialPrint("External closed");
+  }
+  if(val2.isOpen()) {
       mqttClient.publish(VALVE2_STATE_TOPIC, "open");
       mqttClient.publish(VALVE_ERROR_TOPIC, "no error");
       mqttClient.publish(SUBSCRIBE_TOPIC, "3");
       serialPrint("External open");
-      break;
   }
+
   mqttClient.publish(LIT_INT_TOTAL_TOPIC, total_inter_volume_msg);
   delay(50);
-  mqttClient.publish(LIT_INT_TOTAL_TOPIC, total_exter_volume_msg);
+  mqttClient.publish(LIT_EXT_TOTAL_TOPIC, total_exter_volume_msg);
   delay(50);
   mqttClient.publish(TECHNICAL_CONNECTION_FAILED, connection_failed_char);
   delay(50);
